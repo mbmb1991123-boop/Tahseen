@@ -579,38 +579,39 @@
     toast._t = setTimeout(()=> t.classList.remove('show'), 1400);
   }
 
-  // ---------- Storage ----------
-  async function loadAll(){
+  // ---------- Storage (localStorage, يعمل بشكل مستقل داخل المتصفح) ----------
+  const STORAGE_PREFIX = 'tahseen:';
+
+  function loadAll(){
     try{
-      const s = await window.storage.get('settings');
-      if(s && s.value) settings = JSON.parse(s.value);
+      const s = localStorage.getItem(STORAGE_PREFIX+'settings');
+      if(s) settings = JSON.parse(s);
     }catch(e){}
     try{
-      const keysRes = await window.storage.list('entry:');
-      if(keysRes && keysRes.keys && keysRes.keys.length){
-        const results = await Promise.all(keysRes.keys.map(k => window.storage.get(k).catch(()=>null)));
-        results.forEach(r=>{
-          if(r && r.value){
-            try{
-              const data = JSON.parse(r.value);
-              entries[data.date] = data;
-            }catch(e){}
-          }
-        });
+      for(let i=0;i<localStorage.length;i++){
+        const key = localStorage.key(i);
+        if(key && key.indexOf(STORAGE_PREFIX+'entry:')===0){
+          try{
+            const data = JSON.parse(localStorage.getItem(key));
+            if(data && data.date) entries[data.date] = data;
+          }catch(e){}
+        }
       }
     }catch(e){}
   }
 
-  async function saveEntry(dateKey){
+  function saveEntry(dateKey){
     const data = entries[dateKey];
     try{
-      await window.storage.set('entry:'+dateKey, JSON.stringify(data));
-    }catch(e){}
+      localStorage.setItem(STORAGE_PREFIX+'entry:'+dateKey, JSON.stringify(data));
+    }catch(e){
+      toast('تعذّر الحفظ');
+    }
   }
 
-  async function saveSettings(){
+  function saveSettings(){
     try{
-      await window.storage.set('settings', JSON.stringify(settings));
+      localStorage.setItem(STORAGE_PREFIX+'settings', JSON.stringify(settings));
     }catch(e){}
   }
 
