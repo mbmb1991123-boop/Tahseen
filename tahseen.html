@@ -392,6 +392,20 @@
     cursor:pointer;
   }
 
+  .weekend-note{
+    background: var(--night-950);
+    border:1px dashed var(--night-700);
+    color: var(--dawn-300);
+    font-size:13px;
+    text-align:center;
+    padding:12px 10px;
+    border-radius:12px;
+  }
+
+  .grid-cell.weekend{
+    background: repeating-linear-gradient(45deg, #23284a, #23284a 3px, #1a1f3d 3px, #1a1f3d 6px);
+  }
+
   .account-row{
     display:flex; align-items:center; justify-content:space-between;
     margin: 2px 0 18px;
@@ -560,7 +574,7 @@
       </div>
     </div>
 
-    <div class="habit-card">
+    <div class="habit-card" id="workCard">
       <div class="habit-top">
         <div class="habit-icon icon-work">🏢</div>
         <div>
@@ -568,7 +582,10 @@
           <div class="habit-target" id="workTargetLabel"></div>
         </div>
       </div>
-      <div class="choice-row" data-habit="work">
+      <div class="weekend-note" id="weekendNote" style="display:none;">
+        🏖️ عطلة نهاية الأسبوع — لا يوجد دوام اليوم
+      </div>
+      <div class="choice-row" data-habit="work" id="workChoiceRow">
         <button class="choice-btn" data-val="done">حضرت بالوقت</button>
         <button class="choice-btn" data-val="missed">تأخرت</button>
       </div>
@@ -631,6 +648,7 @@
           <span><span class="legend-dot" style="background:var(--partial)"></span>قضاء</span>
           <span><span class="legend-dot" style="background:var(--missed)"></span>فاتت</span>
           <span><span class="legend-dot" style="background:var(--empty)"></span>بدون تسجيل</span>
+          <span><span class="legend-dot" style="background:repeating-linear-gradient(45deg,#23284a,#23284a 2px,#1a1f3d 2px,#1a1f3d 4px)"></span>عطلة</span>
         </div>
       </div>
     </div>
@@ -698,6 +716,12 @@
   }
   const today = new Date();
   const todayKey = toDateKey(today);
+
+  // الجمعة (5) والسبت (6) عطلة نهاية الأسبوع — لا يوجد دوام فيهما
+  function isWeekend(dateKey){
+    const day = new Date(dateKey).getDay();
+    return day === 5 || day === 6;
+  }
 
   function fmtArabicDate(d){
     const days=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
@@ -892,6 +916,11 @@
     document.getElementById('workNote').value = entry.workNote || '';
     document.getElementById('readingNote').value = entry.readingNote || '';
     document.getElementById('exerciseNote').value = entry.exerciseNote || '';
+
+    const weekendToday = isWeekend(todayKey);
+    document.getElementById('weekendNote').style.display = weekendToday ? 'block' : 'none';
+    document.getElementById('workChoiceRow').style.display = weekendToday ? 'none' : 'flex';
+    document.getElementById('workNote').style.display = weekendToday ? 'none' : 'block';
   }
 
   document.querySelectorAll('.choice-row').forEach(row=>{
@@ -922,11 +951,13 @@
     if(v==='done') return '#5fae82';
     if(v==='partial') return '#e0b04a';
     if(v==='missed') return '#c56a63';
+    if(v==='weekend') return '#6fb8c9';
     return '#3a3f6e';
   }
 
   function renderArc(){
     const entry = getEntry(todayKey);
+    const weekendToday = isWeekend(todayKey);
     const svg = document.getElementById('arcSvg');
     const w=320, h=130;
     const pathD = `M 20,100 A 140,140 0 0 1 300,100`;
@@ -936,14 +967,15 @@
     const tempPath = document.getElementById('arcPath');
     const len = tempPath.getTotalLength();
     const stops = [0.06, 0.5, 0.94];
-    const vals = [entry.sleep, entry.fajr, entry.work];
-    const icons = ['🌙','🕌','🏢'];
+    // على الويكند لا يدخل الدوام في حساب التقدّم، لكن يُعرض بشكل مختلف بصرياً
+    const progressVals = [entry.sleep, entry.fajr, weekendToday ? null : entry.work];
+    const displayVals = [entry.sleep, entry.fajr, weekendToday ? 'weekend' : entry.work];
+    const icons = ['🌙','🕌', weekendToday ? '🏖️' : '🏢'];
 
     // progress overlay: colored up to the furthest completed checkpoint
     let filledIdx = -1;
-    vals.forEach((v,i)=>{ if(v) filledIdx = i; });
+    progressVals.forEach((v,i)=>{ if(v) filledIdx = i; });
     if(filledIdx >= 0){
-      const p = tempPath.getPointAtLength(len*Math.min(stops[filledIdx]+0.02,1));
       const grad = document.createElementNS('http://www.w3.org/2000/svg','defs');
       grad.innerHTML = `<linearGradient id="dawnGrad" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%" stop-color="#4a4f9c"/>
@@ -963,25 +995,27 @@
 
     stops.forEach((t,i)=>{
       const pt = tempPath.getPointAtLength(len*t);
-      const color = statusColor(vals[i]);
+      const color = statusColor(displayVals[i]);
       const g = document.createElementNS('http://www.w3.org/2000/svg','g');
       g.innerHTML = `
-        <circle cx="${pt.x}" cy="${pt.y}" r="17" fill="${color}" opacity="${vals[i] ? '1':'0.35'}"/>
-        <circle cx="${pt.x}" cy="${pt.y}" r="17" fill="none" stroke="${vals[i] ? color : '#5c6191'}" stroke-width="1.5"/>
+        <circle cx="${pt.x}" cy="${pt.y}" r="17" fill="${color}" opacity="${displayVals[i] ? '1':'0.35'}"/>
+        <circle cx="${pt.x}" cy="${pt.y}" r="17" fill="none" stroke="${displayVals[i] ? color : '#5c6191'}" stroke-width="1.5"/>
         <text x="${pt.x}" y="${pt.y+6}" font-size="15" text-anchor="middle">${icons[i]}</text>
       `;
       svg.appendChild(g);
     });
 
-    const doneCount = vals.filter(v=>v==='done').length;
-    const anyCount = vals.filter(v=>v).length;
+    const relevantVals = weekendToday ? [entry.sleep, entry.fajr] : [entry.sleep, entry.fajr, entry.work];
+    const totalToday = relevantVals.length;
+    const doneCount = relevantVals.filter(v=>v==='done').length;
+    const anyCount = relevantVals.filter(v=>v).length;
     const statusEl = document.getElementById('arcStatus');
     if(anyCount===0){
-      statusEl.textContent = 'ابدأ يومك — سجّل أول عادة';
-    } else if(doneCount===3){
+      statusEl.textContent = weekendToday ? 'عطلة نهاية الأسبوع — ابدأ يومك 🏖️' : 'ابدأ يومك — سجّل أول عادة';
+    } else if(doneCount===totalToday){
       statusEl.textContent = 'يوم مكتمل بامتياز ✨';
     } else {
-      statusEl.textContent = `${anyCount} من 3 مسجّلة اليوم`;
+      statusEl.textContent = `${anyCount} من ${totalToday} مسجّلة اليوم`;
     }
   }
 
@@ -1036,6 +1070,7 @@
     HABITS.forEach(h=>{
       let sum=0, count=0;
       keys30.forEach(k=>{
+        if(h==='work' && isWeekend(k)) return; // لا دوام في الجمعة والسبت
         const e = entries[k];
         if(e && e[h]){ sum += habitScore(e[h]); count++; }
       });
@@ -1046,19 +1081,24 @@
       gaugesRow.appendChild(card);
     });
 
-    // streaks (successful day = all 3 habits filled and none 'missed')
+    // streaks (successful day = all العادات المطلوبة لذلك اليوم مسجّلة وبدون "فاتت"، مع استثناء الدوام في الويكند)
+    function habitsRequiredFor(k){
+      return isWeekend(k) ? HABITS.filter(h=>h!=='work') : HABITS;
+    }
     function isSuccessDay(k){
       const e = entries[k];
       if(!e) return false;
-      const filled = HABITS.every(h=>e[h]);
+      const required = habitsRequiredFor(k);
+      const filled = required.every(h=>e[h]);
       if(!filled) return false;
-      return HABITS.every(h=> e[h] !== 'missed');
+      return required.every(h=> e[h] !== 'missed');
     }
     let current=0;
     for(let i=0;i<365;i++){
       const d=new Date(today); d.setDate(d.getDate()-i);
       const k=toDateKey(d);
-      if(entries[k] && !HABITS.every(h=>entries[k][h])) {
+      const required = habitsRequiredFor(k);
+      if(entries[k] && !required.every(h=>entries[k][h])) {
         if(i===0) continue; else break;
       }
       if(isSuccessDay(k)) current++; else break;
@@ -1085,8 +1125,11 @@
       const cellsHtml = keys14.map(k=>{
         const e = entries[k];
         const v = e ? e[h] : null;
-        const cls = v==='done'?'done':(v==='partial'?'partial':(v==='missed'?'missed':''));
         const isToday = k===todayKey ? ' today':'';
+        if(h==='work' && isWeekend(k)){
+          return `<div class="grid-cell weekend${isToday}"></div>`;
+        }
+        const cls = v==='done'?'done':(v==='partial'?'partial':(v==='missed'?'missed':''));
         return `<div class="grid-cell ${cls}${isToday}"></div>`;
       }).join('');
       row.innerHTML = `<div class="grid-row-label">${labels[h]}</div><div class="grid-cells">${cellsHtml}</div>`;
